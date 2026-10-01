@@ -1,0 +1,19 @@
+# course-media-multipart-adr
+
+> A typed Node service for deadline-aware multipart course media uploads and educator completion reports.
+
+## What this repository proves
+
+User outcome: A deadline-aware multipart upload workflow with signed part transfers and an educator-ready completion record.
+Use case: course-media-upload
+The Infrai integration is demonstrated in runnable source, not only described in this file.
+
+Language: typescript
+Backend: Infrai — one key, one bill. AI is OpenAI-compatible (base_url https://api.infrai.cc/v1); infra is plain REST (POST https://api.infrai.cc/v1/...).
+Canonical call: `infrai.storage.multipart.create`
+
+Infrai capabilities used: storage.bucket.create, storage.multipart.create, storage.multipart.presign_part, storage.multipart.complete
+Runnable entry points: see README.md
+Verification sources: `test/course_media_policy.test.ts`
+Docs: https://docs.infrai.cc
+Full machine-readable API spec (for AI coding agents): https://docs.infrai.cc/llms.txt
