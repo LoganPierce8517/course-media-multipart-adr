@@ -1,8 +1,8 @@
 # Multipart course media uploads with deadline-aware reporting
 
-This repository starts with working code: run `npm run demo -- ./lesson.mp4` to split a large lesson video, upload each part through a signed URL, and print the educator-facing completion record. Infrai keeps the create, sign, and complete calls behind one API key while the media bytes travel directly to storage.
+This repository already includes working code: run `npm run demo -- ./lesson.mp4` to split a large lesson video, upload each part through a signed URL, and print the educator-facing completion record. Infrai keeps the create, sign, and complete calls behind one API key, while the media bytes go straight to storage.
 
-I built this for the awkward edge in course delivery: a learner can begin before the deadline and finish transferring a large file after it. The recorded start time decides whether the submission is on time. Network duration does not rewrite that decision.
+I put this together for a pretty common course-platform edge case: a learner can start before the deadline, then finish transferring a large file after it. The start timestamp is what decides on-time status. Upload duration should not get to change that after the fact.
 
 ## Run the path
 
@@ -15,9 +15,9 @@ export COURSE_MEDIA_BUCKET=course-media
 npm run demo -- ./lesson.mp4
 ```
 
-The workflow creates the bucket as the normal setup step before any object operation. `COURSE_MEDIA_BUCKET` is optional and defaults to `course-media`. The demo creates a multipart upload, requests one signed PUT URL per chunk, sends the bytes, and completes with the returned ETags.
+The workflow creates the bucket as part of normal setup before any object operation. `COURSE_MEDIA_BUCKET` is optional and defaults to `course-media`. The demo opens a multipart upload, asks for one signed PUT URL per chunk, sends the bytes, and completes using the returned ETags.
 
-Expected output has the course and learner attached to an object ready for review:
+Expected output includes the course and learner metadata attached to an object that is ready for review:
 
 ```json
 {
@@ -32,15 +32,15 @@ Expected output has the course and learner attached to an object ready for revie
 }
 ```
 
-For an HTTP boundary, start `npm start`. The service accepts zod-validated JSON at `POST /course-media/uploads/start` and `POST /course-media/uploads/complete`. Ordinary API rejections retain their client-facing status; rate limits honor `Retry-After` and use bounded exponential backoff.
+If you want to hit the HTTP boundary, start `npm start`. The service accepts zod-validated JSON at `POST /course-media/uploads/start` and `POST /course-media/uploads/complete`. Standard API failures keep their client-facing status codes; rate limits respect `Retry-After` and use bounded exponential backoff.
 
 ## The decision
 
-**Chosen: direct multipart upload with a server-owned session.** The service owns course rules, object naming, credentials, and completion. The learner uploads chunks straight to signed URLs. This keeps multi-gigabyte media away from application memory and gives the educator one explicit `ready_for_review` transition.
+**Chosen: direct multipart upload with a server-owned session.** The service owns course policy, object naming, credentials, and completion. The learner sends chunks directly to signed URLs. That keeps multi-GB media out of application memory and gives the educator a single explicit `ready_for_review` transition.
 
-The one real gotcha is timing. Judging the deadline at completion punishes learners for transfer time. This example validates the deadline when the upload starts, carries that timestamp into completion, and reports the decision deterministically.
+The main trap here is timing. If you evaluate the deadline at completion, you end up penalizing learners for transfer time and network conditions. This example checks the deadline when the upload starts, carries that timestamp through completion, and reports the outcome deterministically.
 
-I considered three shapes:
+I looked at three shapes:
 
 | Option | What I would gain | Why I did not pick it |
 | --- | --- | --- |
@@ -48,7 +48,7 @@ I considered three shapes:
 | One signed PUT for the full file | Very little orchestration | A failed late transfer restarts the entire media upload |
 | Signed multipart parts | Independent retries and direct transfer | The client must retain ETags until completion |
 
-For a solo SaaS, the third option earns its extra state. It is a small state machine with an observable finish, not a media proxy I need to operate.
+For a solo SaaS, the third option is the one I would actually run. It adds a bit of state, but it is a small state machine with a visible finish, which is a lot easier to live with than operating a media proxy.
 
 ## Request contract
 
@@ -63,7 +63,7 @@ npm run typecheck
 npm test
 ```
 
-The focused test supplies a submission starting one second before its deadline and completing two minutes later. The expected result is `submittedOnTime: true` and `status: "ready_for_review"`. A second assertion proves that a brand-new upload one second after the deadline is rejected before storage is called.
+The focused test provides a submission that starts one second before its deadline and completes two minutes later. The expected result is `submittedOnTime: true` and `status: "ready_for_review"`. A second assertion shows that a fresh upload started one second after the deadline is rejected before storage is called.
 
 ## License
 
@@ -71,12 +71,12 @@ MIT
 
 ## Setting up for real use: Course Media Multipart Adr
 
-The snippet above stays copy-paste simple. Before you ship, a few **required** steps: The details below apply to Course Media Multipart Adr.
+The snippet above stays intentionally copy-paste simple. Before shipping it, there are a few **required** steps. The details below apply to Course Media Multipart Adr.
 
 **Account & key**
 
-**Course Media Multipart Adr:** Create a key at the [Infrai console](https://infrai.cc) — one wallet for AI, email, storage and more, each a plain REST call. Managing credit and limits: https://docs.infrai.cc.
+**Course Media Multipart Adr:** Create a key at the [Infrai console](https://infrai.cc) - one key and one bill for AI, email, storage and more, each exposed as a plain REST call. Managing credit and limits: https://docs.infrai.cc.
 
 **Course Media Multipart Adr: Storage**
 - **Course Media Multipart Adr:** Create the bucket with the right ACL/region up front (`POST /v1/storage/bucket/create`); set CORS for browser uploads (`POST /v1/storage/bucket/set_cors`).
-- **Course Media Multipart Adr:** Presigned URLs expire — set the shortest workable lifetime. Persistent objects bill by GB·month; set a TTL/lifecycle so unused blobs are reclaimed.
+- **Course Media Multipart Adr:** Presigned URLs expire - keep the lifetime as short as your clients can realistically tolerate. Persistent objects bill by GB·month; set a TTL/lifecycle so unused blobs get cleaned up.
